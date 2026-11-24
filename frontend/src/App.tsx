@@ -126,6 +126,16 @@ export default function App() {
     }
   };
 
+  const handleStopScrape = async () => {
+    try {
+      await fetch('/api/scrape/stop', { method: 'POST' });
+      fetchStatus();
+      fetchHistory();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const navGroups: NavGroupData[] = [
     {
       items: [
@@ -266,6 +276,7 @@ export default function App() {
             <ScraperTab 
               taskState={taskState}
               onStartScrape={handleStartScrape}
+              onStopScrape={handleStopScrape}
               presetQuery={presetSearch?.query}
               presetLocation={presetSearch?.location}
             />

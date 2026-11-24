@@ -47,6 +47,8 @@ active_task: Dict[str, Any] = {
     "error": None
 }
 
+is_scraping_stopped = False
+
 class ScrapeRequest(BaseModel):
     location: str
     query: str
@@ -259,7 +261,8 @@ async def test_openai(body: Optional[KeyTestRequest] = None):
         return {"success": False, "error": f"OpenAI error: {str(e)[:120]}"}
 
 async def run_scraper_task(location: str, query: str, pages: int):
-    global active_task
+    global active_task, is_scraping_stopped
+    is_scraping_stopped = False
     active_task["running"] = True
     active_task["progress"] = 0.05
     active_task["current_step"] = f"Locating '{location}'..."
@@ -302,13 +305,20 @@ async def run_scraper_task(location: str, query: str, pages: int):
                 pass
 
         active_task["current_step"] = "Visiting websites and extracting contacts with AI..."
-        await process_businesses(excel_filename, progress_callback=on_progress)
+        await process_businesses(
+            excel_filename, 
+            progress_callback=on_progress, 
+            should_stop=lambda: is_scraping_stopped
+        )
         
         # Load final results
         df, _ = load_excel_data(excel_filename)
         active_task["results"] = df.to_dict(orient="records")
-        active_task["progress"] = 1.0
-        active_task["current_step"] = "Complete! All leads generated and enriched."
+        if is_scraping_stopped:
+            active_task["current_step"] = "Stopped by user. Partial results saved."
+        else:
+            active_task["progress"] = 1.0
+            active_task["current_step"] = "Complete! All leads generated and enriched."
     except Exception as e:
         active_task["error"] = str(e)
         active_task["current_step"] = f"Error: {e}"
@@ -323,6 +333,16 @@ async def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
         
     background_tasks.add_task(run_scraper_task, req.location, req.query, req.pages)
     return {"status": "started", "message": f"Scrape started for '{req.query}' in '{req.location}'"}
+
+@app.post("/api/scrape/stop")
+def stop_scrape():
+    global active_task, is_scraping_stopped
+    if active_task["running"]:
+        is_scraping_stopped = True
+        active_task["running"] = False
+        active_task["current_step"] = "Stopping generation... Progress saved."
+        return {"status": "success", "message": "Scrape task stopped"}
+    return {"status": "ignored", "message": "No active scrape task running"}
 
 @app.get("/api/scrape/status")
 def scrape_status():

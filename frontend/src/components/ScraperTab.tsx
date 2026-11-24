@@ -5,13 +5,15 @@ import {
   Download, 
   Check, 
   Copy, 
-  ExternalLink,
-  Search,
-  Layers,
-  ChevronDown,
-  ChevronRight,
-  MapPin,
-  Clock
+  ExternalLink, 
+  Search, 
+  Layers, 
+  ChevronDown, 
+  ChevronUp, 
+  ChevronRight, 
+  MapPin, 
+  Clock, 
+  Square 
 } from 'lucide-react';
 import { OpeningHours } from './OpeningHours';
 import { SocialLinks } from './SocialIcons';
@@ -20,6 +22,7 @@ import type { ScrapeTaskState } from '../types';
 interface ScraperTabProps {
   taskState: ScrapeTaskState;
   onStartScrape: (location: string, query: string, pages: number) => void;
+  onStopScrape?: () => void;
   presetQuery?: string;
   presetLocation?: string;
 }
@@ -27,6 +30,7 @@ interface ScraperTabProps {
 export function ScraperTab({ 
   taskState, 
   onStartScrape, 
+  onStopScrape,
   presetQuery = '', 
   presetLocation = '' 
 }: ScraperTabProps) {
@@ -37,6 +41,8 @@ export function ScraperTab({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [expandedTypes, setExpandedTypes] = useState<Set<number>>(new Set());
+  const [isTableExpanded, setIsTableExpanded] = useState(false);
+  const [stopping, setStopping] = useState(false);
 
   useEffect(() => {
     if (presetQuery) setQuery(presetQuery);
@@ -225,9 +231,25 @@ export function ScraperTab({
                 )}
               </div>
             </div>
-            <span className="text-xs font-mono text-muted-foreground">
-              {Math.round(taskState.progress * 100)}% ({taskState.current}/{taskState.total || pages * 20})
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono text-muted-foreground">
+                {Math.round(taskState.progress * 100)}% ({taskState.current}/{taskState.total || pages * 20})
+              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  setStopping(true);
+                  if (onStopScrape) await onStopScrape();
+                  setTimeout(() => setStopping(false), 2000);
+                }}
+                disabled={stopping}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-destructive/50 text-destructive hover:bg-destructive/10 text-xs font-medium transition-colors cursor-pointer"
+                title="Stop scraping and keep collected leads"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span>{stopping ? 'Stopping...' : 'Stop'}</span>
+              </button>
+            </div>
           </div>
 
           <div className="w-full h-1.5 bg-input/20 rounded-full overflow-hidden">
@@ -249,7 +271,7 @@ export function ScraperTab({
       {/* Results Section */}
       {taskState.results && taskState.results.length > 0 && (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-card rounded-xl border border-border/50 shadow-xs">
             <div className="flex items-center gap-2 text-xs">
               <span className="font-medium text-foreground">{taskState.results.length} Leads Collected</span>
               <span className="text-muted-foreground">•</span>
@@ -257,16 +279,18 @@ export function ScraperTab({
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-56">
-                <Search className="w-3.5 h-3.5 text-muted-foreground/70 absolute left-2.5 top-2" />
-                <input
-                  type="text"
-                  value={tableFilter}
-                  onChange={e => setTableFilter(e.target.value)}
-                  placeholder="Filter results..."
-                  className="w-full pl-8 pr-2.5 py-1.5 bg-input/20 border border-border/50 rounded-md text-xs text-foreground placeholder:text-muted-foreground/60 outline-none"
-                />
-              </div>
+              {isTableExpanded && (
+                <div className="relative flex-1 sm:w-56 animate-in fade-in duration-100">
+                  <Search className="w-3.5 h-3.5 text-muted-foreground/70 absolute left-2.5 top-2" />
+                  <input
+                    type="text"
+                    value={tableFilter}
+                    onChange={e => setTableFilter(e.target.value)}
+                    placeholder="Filter results..."
+                    className="w-full pl-8 pr-2.5 py-1.5 bg-input/20 border border-border/50 rounded-md text-xs text-foreground placeholder:text-muted-foreground/60 outline-none"
+                  />
+                </div>
+              )}
 
               {taskState.excel_file && (
                 <a
@@ -277,16 +301,36 @@ export function ScraperTab({
                   Excel
                 </a>
               )}
+
+              {/* Show / Hide Leads Table Button */}
+              <button
+                type="button"
+                onClick={() => setIsTableExpanded(!isTableExpanded)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/60 hover:bg-black/5 dark:hover:bg-white/5 text-foreground text-xs font-medium cursor-pointer transition-colors"
+              >
+                {isTableExpanded ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5" />
+                    <span>Hide Leads</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                    <span>Show Leads ({filteredResults.length})</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
-          {/* Table with Horizontal Scroll & Expandable Types */}
-          <div className="w-full overflow-x-auto rounded-xl border border-border/50 bg-card shadow-sm">
-            <div className="min-w-[1300px]">
-              <table className="w-full text-left text-xs text-foreground border-collapse">
-                <thead className="bg-black/5 dark:bg-white/5 text-muted-foreground font-medium uppercase text-[10px] border-b border-border/50 tracking-wider">
-                  <tr>
-                    <th className="px-3.5 py-2.5 w-[50px] text-center">#</th>
+          {/* Table (Collapsible) */}
+          {isTableExpanded && (
+            <div className="w-full overflow-x-auto rounded-xl border border-border/50 bg-card shadow-sm animate-in fade-in zoom-in-98 duration-150">
+              <div className="min-w-[1300px]">
+                <table className="w-full text-left text-xs text-foreground border-collapse">
+                  <thead className="bg-black/5 dark:bg-white/5 text-muted-foreground font-medium uppercase text-[10px] border-b border-border/50 tracking-wider">
+                    <tr>
+                      <th className="px-3.5 py-2.5 w-[50px] text-center">#</th>
                     <th className="px-3.5 py-2.5 min-w-[200px]">Business</th>
                     <th className="px-3.5 py-2.5 min-w-[180px]">Types / Category</th>
                     <th className="px-3.5 py-2.5 min-w-[200px]">Website (Clickable)</th>
@@ -520,6 +564,7 @@ export function ScraperTab({
               </table>
             </div>
           </div>
+          )}
         </div>
       )}
     </div>

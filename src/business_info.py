@@ -208,12 +208,14 @@ async def get_business_info(
         'email': " || ".join(emails_result.get('emails', [])) if isinstance(emails_result.get('emails'), list) else str(emails_result.get('emails', '')),
     }
 
-async def process_businesses(excel_file, progress_callback=None) :
+async def process_businesses(excel_file, progress_callback=None, should_stop=None) :
     """
     Process a list of businesses to extract detailed information and update the Excel file.
     
     Args:
         excel_file (str): Path to the Excel file to update
+        progress_callback (callable, optional): Async callback for progress updates
+        should_stop (callable, optional): Callable returning True if process should halt
         
     Returns:
         List[Dict]: Enhanced business data with extracted information
@@ -223,6 +225,11 @@ async def process_businesses(excel_file, progress_callback=None) :
     
     # Process each business with a progress bar
     for index, row in tqdm(df.iterrows(), desc="Processing businesses", unit="business"):
+        # Check if stop was requested
+        if should_stop and callable(should_stop) and should_stop():
+            print("Notice: Stop signal received. Halting business processing early.")
+            break
+
         name = row.get("name", "")
         url = row.get("website", "")
         location = row.get("address", "")
@@ -232,6 +239,11 @@ async def process_businesses(excel_file, progress_callback=None) :
             continue
         
         try:
+            # Check stop signal before scraping next website
+            if should_stop and callable(should_stop) and should_stop():
+                print("Notice: Stop signal received. Halting.")
+                break
+
             # Update UI progress via callback if provided
             if progress_callback and callable(progress_callback):
                 await progress_callback(len(df), index, name)
