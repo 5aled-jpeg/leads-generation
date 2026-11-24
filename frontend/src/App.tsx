@@ -25,7 +25,7 @@ import type { NavItemData, NavGroupData, ScrapeTaskState, HistoryFile } from './
 export default function App() {
   const [isOpen, setIsOpen] = useState(true);
   const [activeId, setActiveId] = useState('scrape');
-  const [activeWorkspace, setActiveWorkspace] = useState('Acme Corp');
+  const [activeWorkspace, setActiveWorkspace] = useState('Lead Generator');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
