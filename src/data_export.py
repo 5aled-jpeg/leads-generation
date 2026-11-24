@@ -44,6 +44,7 @@ def save_places_to_excel(places_data, filename):
         'facebook': '',
         'twitter': '',
         'instagram': '',
+        'linkedin': '',
         'searched': 'NO',
     } for place in all_places])
     
@@ -67,6 +68,7 @@ def update_business_data(df, index, info):
         df.at[index, 'facebook'] = info.get('facebook', '')
         df.at[index, 'twitter'] = info.get('twitter', '')
         df.at[index, 'instagram'] = info.get('instagram', '')
+        df.at[index, 'linkedin'] = info.get('linkedin', '')
     df.at[index, 'searched'] = "YES"
 
 def load_excel_data(filename: str) -> pd.DataFrame:

@@ -35,30 +35,44 @@ with st.sidebar:
     
     # API Keys
     st.subheader("API Keys")
-    serper_api_key = st.text_input("Serper API Key", type="password")
-    openrouter_api_key = st.text_input("OpenRouter API Key", type="password")
+    default_serper = os.getenv("SERPER_API_KEY", "")
+    serper_api_key = st.text_input("Serper API Key (Required)", value=default_serper, type="password")
     
-    # LLM Model Settings
-    st.subheader("LLM Model")
-    llm_model = st.selectbox(
-        "Select LLM Model",
+    default_provider_idx = 1 if os.getenv("GEMINI_API_KEY") else 0
+    ai_provider = st.selectbox(
+        "AI Enrichment Provider",
         options=[
-            "openai/gpt-4.1-mini",
-            "openai/gpt-4o-mini",
-            "anthropic/claude-3-haiku",
-            "anthropic/claude-3.5-sonnet",
-            "deepseek/deepseek-chat",
-            "mistral/mistral-large-2"
+            "Built-in Smart Heuristic (100% Free, No Key Needed)",
+            "Google Gemini (Free at aistudio.google.com)",
+            "Groq (Free at console.groq.com)",
+            "OpenRouter (openrouter.ai)",
+            "OpenAI (platform.openai.com)"
         ],
-        index=0,
+        index=default_provider_idx
     )
+    
+    provider_key = ""
+    if "Google Gemini" in ai_provider:
+        provider_key = st.text_input("Gemini API Key", value=os.getenv("GEMINI_API_KEY", ""), type="password")
+    elif "Groq" in ai_provider:
+        provider_key = st.text_input("Groq API Key", value=os.getenv("GROQ_API_KEY", ""), type="password")
+    elif "OpenRouter" in ai_provider:
+        provider_key = st.text_input("OpenRouter API Key", value=os.getenv("OPENROUTER_API_KEY", ""), type="password")
+    elif "OpenAI" in ai_provider:
+        provider_key = st.text_input("OpenAI API Key", value=os.getenv("OPENAI_API_KEY", ""), type="password")
     
     # Save settings button
     if st.button("Save Settings"):
-        # Temporarily set environment variables for this session
-        os.environ["SERPER_API_KEY"] = serper_api_key
-        os.environ["OPENROUTER_API_KEY"] = openrouter_api_key
-        os.environ["LLM_MODEL"] = llm_model
+        if serper_api_key:
+            os.environ["SERPER_API_KEY"] = serper_api_key
+        if "Google Gemini" in ai_provider:
+            os.environ["GEMINI_API_KEY"] = provider_key
+        elif "Groq" in ai_provider:
+            os.environ["GROQ_API_KEY"] = provider_key
+        elif "OpenRouter" in ai_provider:
+            os.environ["OPENROUTER_API_KEY"] = provider_key
+        elif "OpenAI" in ai_provider:
+            os.environ["OPENAI_API_KEY"] = provider_key
         st.success("Settings saved for this session!")
 
 # Main form
@@ -130,9 +144,9 @@ async def main_with_progress(location, search_query, num_pages):
 
 # Main execution logic
 if submit_button:
-    # Check if API keys are set
-    if not os.environ.get("SERPER_API_KEY") or not os.environ.get("OPENROUTER_API_KEY"):
-        st.error("⚠️ Please set your API keys in the sidebar before starting.")
+    # Check if Serper API key is set
+    if not os.environ.get("SERPER_API_KEY"):
+        st.error("⚠️ Please set your Serper API Key in the sidebar or in .env before starting.")
     else:
         with st.spinner("Starting lead generation..."):
             # Run the async function

@@ -7,4 +7,6 @@ python-dotenv
 openpyxl
 langchain_openai
 tqdm
+fastapi
+uvicorn
 streamlit

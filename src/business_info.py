@@ -9,17 +9,65 @@ from .web_scraper import (
 from .utils import ainvoke_llm
 
 
+from urllib.parse import urlparse
+
 # Type definitions for structured data
 class BusinessInfo(TypedDict):
     """TypedDict defining the structure of business information response"""
     facebook: str # Facebook link
     twitter: str # Twitter link
     instagram: str # Instagram link
+    linkedin: str # LinkedIn link
     contact: str # Contact page link
 
 class EmailsResponse(TypedDict):
     """TypedDict for email response"""
     emails: List[str]
+
+def heuristic_filter_links(links_dict: Dict[str, List[str]]) -> Dict[str, str]:
+    """Smart heuristic fallback to pick official social and contact links without LLM."""
+    def clean_link(urls, exclude_words):
+        for u in urls:
+            if not any(w in u.lower() for w in exclude_words):
+                return u
+        return urls[0] if urls else ""
+
+    return {
+        "facebook": clean_link(links_dict.get('facebook', []), ['sharer', 'share.php']),
+        "twitter": clean_link(links_dict.get('twitter', []), ['intent/tweet', 'share']),
+        "instagram": clean_link(links_dict.get('instagram', []), []),
+        "linkedin": clean_link(links_dict.get('linkedin', []), ['sharearticle']),
+        "contact": clean_link(links_dict.get('contact', []), [])
+    }
+
+def heuristic_filter_emails(emails: List[str], business_url: str) -> List[str]:
+    """Smart heuristic fallback to prioritize official domain and contact emails."""
+    domain = urlparse(business_url).netloc.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
+
+    clean_emails = []
+    ignored_ext = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.css', '.js')
+    ignored_keywords = ('sentry', 'wixpress', 'example.com', 'domain.com', 'email.com', 'yourname', 'test@')
+
+    for e in set(emails):
+        e_clean = e.lower().strip()
+        if any(e_clean.endswith(ext) for ext in ignored_ext):
+            continue
+        if any(bad in e_clean for bad in ignored_keywords):
+            continue
+        clean_emails.append(e_clean)
+
+    def priority_score(e):
+        score = 0
+        if domain and domain in e:
+            score += 10
+        if e.startswith(('info@', 'contact@', 'hello@', 'support@', 'sales@', 'office@')):
+            score += 5
+        return score
+
+    clean_emails.sort(key=priority_score, reverse=True)
+    return clean_emails[:3]
 
 async def analyze_business_links(
     links_dict: Dict[str, List[str]], 
@@ -27,8 +75,9 @@ async def analyze_business_links(
     business_location: str, 
     business_url: str
 ):
-        # Create system prompt for the AI
-    system_prompt = f"""
+    # Try LLM if configured
+    try:
+        system_prompt = f"""
 You are an expert at identifying the correct business information from scraped web data.
 Your task is to analyze potential social media links for a business,
 and determine which ones are most likely the official ones.
@@ -42,24 +91,28 @@ Provide only the most probable link for each category.
 If no valid option exists for a category, return an empty string.
 """
 
-    # Create user message with all the context
-    user_message = f"""
-    Potential Facebook links: {links_dict.get('facebook', [])}
-    Potential Twitter links: {links_dict.get('twitter', [])}
-    Potential Instagram links: {links_dict.get('instagram', [])}
-    Potential Contact page links: {links_dict.get('contact', [])}
-    """
-    
-    # Invoke LLM to get structured response
-    response = await ainvoke_llm(
-        model=os.getenv("LLM_MODEL", "gpt-4.1-mini"),
-        system_prompt=system_prompt,
-        user_message=user_message,
-        response_format=BusinessInfo,
-        temperature=0.1
-    )
-    
-    return response
+        user_message = f"""
+        Potential Facebook links: {links_dict.get('facebook', [])}
+        Potential Twitter links: {links_dict.get('twitter', [])}
+        Potential Instagram links: {links_dict.get('instagram', [])}
+        Potential LinkedIn links: {links_dict.get('linkedin', [])}
+        Potential Contact page links: {links_dict.get('contact', [])}
+        """
+        
+        response = await ainvoke_llm(
+            model=os.getenv("LLM_MODEL"),
+            system_prompt=system_prompt,
+            user_message=user_message,
+            response_format=BusinessInfo,
+            temperature=0.1
+        )
+        if response:
+            return response
+    except Exception as e:
+        print(f"LLM link analysis skipped: {e}")
+
+    # Fallback to smart heuristic extraction
+    return heuristic_filter_links(links_dict)
 
 async def analyze_business_emails(
     emails: List[str], 
@@ -67,7 +120,9 @@ async def analyze_business_emails(
     business_location: str, 
     business_url: str
 ):
-    system_prompt = f"""
+    # Try LLM if configured
+    try:
+        system_prompt = f"""
 Identify all relevant business contact emails. Prioritize general contact addresses (such as info@ or contact@) and emails of key personnel that use the business's domain. Exclude department-specific ones (e.g., press, events) unless no main contact is available.
 
 If no domain-based business emails are found, provide any available emails, including personal or free-domain addresses (e.g., Gmail, Yahoo) as fallback contacts.
@@ -79,20 +134,22 @@ If no domain-based business emails are found, provide any available emails, incl
 
 **If only a single valid email is found, just return it.**
 """
+        user_message = f"Potential emails: {list(emails)}"
+        
+        response = await ainvoke_llm(
+            model=os.getenv("LLM_MODEL"),
+            system_prompt=system_prompt,
+            user_message=user_message,
+            response_format=EmailsResponse,
+            temperature=0.1
+        )
+        if response and isinstance(response, dict) and 'emails' in response:
+            return response
+    except Exception as e:
+        print(f"LLM email analysis skipped: {e}")
 
-    # Create user message with all the context
-    user_message = f"Potential emails: {list(emails)}"
-    
-    # Invoke LLM to get structured response
-    response = await ainvoke_llm(
-        model=os.getenv("LLM_MODEL", "gpt-4.1-mini"),
-        system_prompt=system_prompt,
-        user_message=user_message,
-        response_format=EmailsResponse,
-        temperature=0.1
-    )
-    
-    return response
+    # Fallback to smart heuristic extraction
+    return {'emails': heuristic_filter_emails(emails, business_url)}
 
 async def get_business_info(
     business_url: str,
@@ -146,8 +203,9 @@ async def get_business_info(
         'facebook': links_result.get('facebook', ''),
         'twitter': links_result.get('twitter', ''),
         'instagram': links_result.get('instagram', ''),
+        'linkedin': links_result.get('linkedin', ''),
         'contact': links_result.get('contact', ''),
-        'email': " || ".join(emails_result.get('emails', '')),
+        'email': " || ".join(emails_result.get('emails', [])) if isinstance(emails_result.get('emails'), list) else str(emails_result.get('emails', '')),
     }
 
 async def process_businesses(excel_file, progress_callback=None) :
@@ -183,10 +241,13 @@ async def process_businesses(excel_file, progress_callback=None) :
             
             # Update the business information
             update_business_data(df, index, info)
+            
+            # Auto-save after each business so progress is never lost
+            df.to_excel(file_path, index=False)
         except Exception as e:
             print(f"Error processing {name}: {e}")
     
-    # Save the updated DataFrame back to Excel
+    # Final save
     try:
         df.to_excel(file_path, index=False)
     except Exception as e:

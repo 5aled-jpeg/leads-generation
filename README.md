@@ -1,138 +1,125 @@
-# **Google Maps Lead Generation: Find Business data Using AI**
+# **Google Maps Lead Generator: Find & Enrich Business Leads Using AI**
 
-## 👉 **[How to Scrape Unlimited Google Maps Leads Using AI!](https://dev.to/kaymen99/how-to-scrape-unlimited-google-maps-leads-using-ai-4kem)**  
+A modern, high-performance lead generation and enrichment platform that extracts verified business leads from Google Maps, scrapes company websites, and enriches contact details (emails, phone numbers, social media links, and opening hours) using AI.
 
-This **AI lead generation tool** helps you discover and enrich local businesses data from any location. It combines the power of **Serper Maps API** with intelligent **AI web scraping** to build comprehensive business prospect lists that are ready for your sales outreach campaigns!
+---
 
-https://github.com/user-attachments/assets/e65275a6-0369-4f37-bb5d-f81f41f97409
+## 🌟 **Features**
 
-## **Why This Tool?**
+- **Modern Web Dashboard**: Sleek, minimalist user interface with dark/light editorial themes, real-time scraping progress, and live data preview.
+- **Multiple AI Extraction Providers**:
+  - **Google Gemini** (Free tier via Google AI Studio — `gemini-3.5-flash-lite`, zero cost)
+  - **Groq** (Ultra-fast cloud inference with Llama 3.3)
+  - **OpenRouter** (Unified multi-provider aggregator)
+  - **Built-in Smart Heuristic** (Zero-key rule-based extraction fallback)
+- **Comprehensive Lead Data**:
+  - Business name, address, category & keywords
+  - Direct 1-click clickable website links
+  - Emails with 1-click copy & verification
+  - Phone numbers
+  - Real SVG Social links (LinkedIn, Instagram, Facebook, X/Twitter)
+  - Structured, human-readable opening hours schedule
+  - Google rating & reviews count
+- **Real-Time Auto-Save**: Saves incrementally to Excel (`.xlsx`) after every single lead is processed so no data is ever lost.
+- **Saved Collections Inspector**: Search, inspect, expand details, and export previously scraped lead collections with full horizontal scroll and 1-click downloads.
+- **CLI & Streamlit Support**: Run directly via Python CLI, modern FastAPI web dashboard, or Streamlit.
 
-- **Cost-Efficient** – Generate lead lists at the fraction of the cost of other scrapers
-- **Fully Automated** – Handles the entire process from location search to lead enrichment
-- **Contact Detail Extraction** – Automatically finds emails, social media profiles, and more
-- **Smart Web Scraping** – Uses AI to navigate websites and extract relevant information
-- **Ready-to-Use Output** – Generates Excel files you can immediately use for outreach
-- **Multi-LLM Integration** – Choose any AI models like GPT-4.1, Claude or DeepSeek to run your search
+---
 
-## **How It Works**
+## 🚀 **Quick Start**
 
-The tool workflow is simple:
+### 1. Prerequisites
+- Python 3.9+
+- [Serper API key](https://serper.dev/) (Free tier gives 2,500 free searches)
+- [Google AI Studio API key](https://aistudio.google.com/) (Free tier gives 1,500 requests/day)
 
-### 1. Data Collection
-- Takes a location and search query input (e.g., "Toronto", "Realtors")
-- Uses **Serper Maps API** to scrape Google Maps places data
-- Returns a list of relevant places with basic information (business name, address, website, phone, etc.)
+### 2. Installation
+```bash
+# Clone the repository
+git clone https://github.com/<your-username>/google-maps-lead-generator.git
+cd google-maps-lead-generator
 
-### 2. Data Enrichment
-- For each business found, the tool scrapes their website (landing or contact pages)
-- Uses an **AI agent (LLM)** to intelligently identify:
-  - Email addresses
-  - Detailed contact information
-  - Social media links (Facebook, Twitter, Instagram, etc)
-  - Other relevant data points for outreach
+# Create a virtual environment (optional but recommended)
+python -m venv venv
+# On Windows:
+.\venv\Scripts\activate
+# On Linux/macOS:
+source venv/bin/activate
 
-### 3. Data Export
-- Saves all collected and enriched data to an Excel file, under the `data` directory
-- Organizes information in a clean, ready-to-use format for sales outreach
+# Install dependencies
+pip install -r requirements.txt
 
-## **Cost Implications**
+# Install Playwright browser
+playwright install chromium
+```
 
-While other Google Maps scrapers like [Apify's Google Maps Extractor](https://apify.com/compass/google-maps-extractor) or [Crawler Google Places](https://apify.com/compass/crawler-google-places) charge **$5-10 per 1000 results** (depending on the options you choose), this system leverages the Serper API and efficient web scraping to deliver the same results for approximately **$0.2 per 1000 leads** – that's up to **50x cheaper**!
+### 3. Configure API Keys
+Copy the example environment file:
+```bash
+cp .env.example .env
+```
+Edit `.env` with your keys:
+```env
+SERPER_API_KEY=your_serper_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
+LLM_MODEL=gemini-3.5-flash-lite
+```
+*(You can also configure and test all API keys directly in the Web Dashboard under System Settings).*
 
-Even better, Serper API offers **free credits** when you sign up, making your initial lead generation campaigns essentially **free**!
+---
+
+## 💻 **Usage**
+
+### Option A: Modern Web Dashboard (Recommended)
+Launch the full web interface:
+```bash
+python server.py
+```
+Open **`http://localhost:8000`** in your browser.
+
+### Option B: Command Line (CLI)
+Run searches directly from PowerShell or Terminal:
+```bash
+# Format: --location <City/State> --query <Niche/Service> --pages <Count>
+python main.py --location "Miami, FL" --query "Real Estate Agents" --pages 1
+```
+
+### Option C: Streamlit GUI
+```bash
+streamlit run app.py
+```
+
+---
 
 ## 🛠️ **Project Structure**
 
 ```
 .
-├── main.py                # Main application script
-├── process_from_excel.py  # Script to process existing Excel files
+├── server.py              # FastAPI backend serving API & modern UI
+├── main.py                # Command-line scraper runner
+├── app.py                 # Streamlit dashboard
 ├── src/
-│   ├── places_api.py      # Serper Maps API integration
-│   ├── web_scraper.py     # Web scraping utilities with Playwright
-│   ├── business_info.py   # Contact extraction and business data enrichment
-│   ├── data_export.py     # Excel export functions
-│   └── utils.py           # Utility functions
-├── data/                  # Output folder for generated Excel files
-└── requirements.txt       # Python dependencies
+│   ├── places_api.py      # Google Maps API (Serper.dev) with geocoding fallback
+│   ├── web_scraper.py     # Fast website content extraction with Playwright
+│   ├── business_info.py   # AI contact enrichment & real-time auto-saving
+│   ├── data_export.py     # Excel export & formatting
+│   └── utils.py           # Multi-provider LLM integrations (Gemini, Groq, OpenRouter)
+├── frontend/              # Modern React + TypeScript + Tailwind UI
+│   ├── src/components/    # Scraper, Leads Collection, Settings & Analytics tabs
+│   └── dist/              # Pre-compiled production UI bundle
+├── data/                  # Output directory for exported Excel files (.gitignored)
+├── requirements.txt       # Python dependencies
+├── .env.example           # Example environment template
+└── .gitignore             # Strict privacy rules (excludes .env and scraped data)
 ```
 
-## **How to Use**
+---
 
-### Prerequisites
+## 🔒 **Privacy & Data Security**
+- `.env` files are strictly excluded via `.gitignore` to prevent leaking API keys.
+- All scraped lead files in `data/*.xlsx` are excluded from version control, keeping your search history and lead lists private.
 
-- Python 3.8+ installed
-- Serper API key ([Get one here](https://serper.dev/))
-- [OpenRouter API key](https://openrouter.ai/) (to use any LLM model) or you preferred LLM API key, like OpenAI or Claude
+---
 
-### Setup
-
-Clone the repository and install dependencies:
-
-```bash
-# Clone the repository
-git clone https://github.com/kaymen99/google-maps-lead-generator
-cd google-maps-lead-generator
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Set up your API keys
-
-Create a `.env` file in the root directory of the project and add your API keys:
-
-```bash
-SERPER_API_KEY=your-serper-api-key
-OPENROUTER_API_KEY=your-openrouter-api-key
-```
-
-### Running the Tool
-
-Edit the parameters directly in `main.py` to customize your search:
-
-```python
-# In main.py
-location = "Toronto"       # Location to search into
-search_query = "Realtors" # Local business to search for
-num_pages = 1             # Each page contains 20 results
-```
-
-Then you can run the tool with:
-
-```bash
-# Simply run the main.py file
-python main.py
-```
-
-### Running from Streamlit App
-
-You can also run the tool from a Streamlit app by running:
-
-```bash
-streamlit run app.py
-```
-
-### 📊 **Output Files**
-
-The tool automatically generates an Excel file in the `/data` directory at the root of your project:
-
-- `data_[Query]_[Location]_[Date].xlsx`: Complete enriched business data including:
-  - Business names and addresses
-  - Phone numbers
-  - Website URLs
-  - **Extracted email addresses**
-  - **Social media profiles** (Facebook, Twitter, Instagram)
-  - **Contact information**
-  - Additional business metadata (if you want to add more data like products, services, etc.)
-
-This file is ready to use for your outreach campaigns with all the necessary contact details in one place!
-
-## **Contributing**
-
-Contributions are welcome! Please open an issue or submit a pull request for any changes. 
-
-## **Contact**
-
-If you have any questions or suggestions, feel free to reach out!
+## 📄 **License**
+MIT License. Feel free to use, modify, and build upon this tool for commercial or personal projects.

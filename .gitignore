@@ -1,4 +1,37 @@
+# Environment variables and private API keys
 .env
-.gitignore
-/venv
-__pycache__
+.env.local
+.env.*.local
+*.env
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Generated scraping data & exports (keeps all user searches private)
+data/*.xlsx
+data/*.csv
+data/*.json
+!data/.gitkeep
+
+# Frontend dependencies and temp files
+frontend/node_modules/
+frontend/.npm/
+frontend/.vite/
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+.agents/

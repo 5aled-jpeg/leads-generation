@@ -18,16 +18,15 @@ async def main(location, search_query, num_pages):
     """
     print(f"\n🔍 Starting lead generation for '{search_query}' in '{location}'")
     
-    # Step 1: Get coordinates from location
+    # Step 1: Get coordinates from location (optional, falls back gracefully)
     coords = get_coordinates(location)
     if not coords:
-        print("Could not get coordinates for the location. Exiting.")
-        return
+        print(f"Notice: Geocoding bypassed. Searching Google Maps directly for '{location}'...")
         
     # Step 2: Search for places using Serper Maps API
-    places_data = search_places(search_query, coords, num_pages)
+    places_data = search_places(search_query, coords=coords, num_pages=num_pages, location=location)
     if not places_data:
-        print("No places found. Exiting.")
+        print("No places found on Google Maps. Check your query, location, or Serper API key.")
         return
         
     # Step 3: Save places data to Excel
@@ -38,9 +37,13 @@ async def main(location, search_query, num_pages):
     await process_businesses(excel_filename)
 
 if __name__ == "__main__":
-    location = "Toronto" # Location to search into
-    search_query = "Realtors" # Local business to search for
-    num_pages = 1 # Each page contain 20 results
+    import argparse
+    parser = argparse.ArgumentParser(description="AI-Powered Google Maps Lead Generator")
+    parser.add_argument("--location", "-l", type=str, default="Toronto", help="Location to search (e.g. 'Miami', 'Toronto')")
+    parser.add_argument("--query", "-q", type=str, default="Realtors", help="Business type to search for (e.g. 'Dentists', 'Plumbers')")
+    parser.add_argument("--pages", "-p", type=int, default=1, help="Number of pages (20 results per page)")
+    
+    args = parser.parse_args()
     
     # Run main function
-    asyncio.run(main(location, search_query, num_pages))
+    asyncio.run(main(args.location, args.query, args.pages))
