@@ -1,7 +1,8 @@
 import os
 import glob
 import asyncio
-from typing import Dict, Any, Optional
+import json
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 import pandas as pd
 import requests
@@ -33,6 +34,21 @@ app.add_middleware(
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+HOT_LEADS_FILE = os.path.join(DATA_DIR, "hot_leads.json")
+
+def load_hot_leads() -> List[Dict[str, Any]]:
+    if not os.path.exists(HOT_LEADS_FILE):
+        return []
+    try:
+        with open(HOT_LEADS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def save_hot_leads(leads: List[Dict[str, Any]]):
+    with open(HOT_LEADS_FILE, "w", encoding="utf-8") as f:
+        json.dump(leads, f, ensure_ascii=False, indent=2)
 
 # Global active scrape task state
 active_task: Dict[str, Any] = {
@@ -65,6 +81,12 @@ class SettingsUpdate(BaseModel):
 class KeyTestRequest(BaseModel):
     key: Optional[str] = None
     model: Optional[str] = None
+
+class HotLeadsSaveRequest(BaseModel):
+    leads: List[Dict[str, Any]]
+
+class HotLeadsRemoveRequest(BaseModel):
+    names: List[str]
 
 @app.get("/api/status")
 def get_status():
@@ -407,6 +429,68 @@ def download_excel(filename: str):
         path,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename=os.path.basename(filename)
+    )
+
+@app.get("/api/hot-leads")
+def get_hot_leads():
+    leads = load_hot_leads()
+    return {
+        "total": len(leads),
+        "records": leads
+    }
+
+@app.post("/api/hot-leads")
+def add_hot_leads(req: HotLeadsSaveRequest):
+    existing = load_hot_leads()
+    def lead_key(item: Dict[str, Any]) -> str:
+        name = str(item.get("name", "")).strip().lower()
+        website = str(item.get("website", "")).strip().lower()
+        phone = str(item.get("phone", "")).strip()
+        addr = str(item.get("address", "")).strip().lower()
+        return f"{name}|{website or phone or addr}"
+
+    seen = {lead_key(item) for item in existing}
+    added = 0
+    for lead in req.leads:
+        k = lead_key(lead)
+        if k and k not in seen:
+            lead_copy = dict(lead)
+            if "saved_at" not in lead_copy:
+                lead_copy["saved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            existing.insert(0, lead_copy)
+            seen.add(k)
+            added += 1
+
+    save_hot_leads(existing)
+    return {"success": True, "total": len(existing), "added": added}
+
+@app.post("/api/hot-leads/remove")
+def remove_hot_leads(req: HotLeadsRemoveRequest):
+    existing = load_hot_leads()
+    to_remove = set(req.names)
+    updated = [lead for lead in existing if str(lead.get("name", "")) not in to_remove]
+    removed_count = len(existing) - len(updated)
+    save_hot_leads(updated)
+    return {"success": True, "total": len(updated), "removed": removed_count}
+
+@app.post("/api/hot-leads/clear")
+def clear_hot_leads():
+    save_hot_leads([])
+    return {"success": True, "total": 0}
+
+@app.get("/api/hot-leads/export")
+def export_hot_leads():
+    leads = load_hot_leads()
+    if not leads:
+        raise HTTPException(status_code=400, detail="No hot leads to export.")
+    df = pd.DataFrame(leads)
+    export_file = os.path.join(DATA_DIR, "hot_leads_export.xlsx")
+    df.to_excel(export_file, index=False)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    return FileResponse(
+        export_file,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=f"Hot_Leads_{timestamp}.xlsx"
     )
 
 # Mount frontend build if it exists

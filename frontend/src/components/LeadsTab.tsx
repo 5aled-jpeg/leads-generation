@@ -14,7 +14,8 @@ import {
   Layers,
   MapPin,
   Clock,
-  Star
+  Star,
+  Flame
 } from 'lucide-react';
 import { OpeningHours } from './OpeningHours';
 import { SocialLinks } from './SocialIcons';
@@ -23,9 +24,10 @@ import type { HistoryFile, LeadRecord } from '../types';
 interface LeadsTabProps {
   files: HistoryFile[];
   onRefresh: () => void;
+  onHotLeadsChange?: () => void;
 }
 
-export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
+export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) {
   const [search, setSearch] = useState('');
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [previewRecords, setPreviewRecords] = useState<LeadRecord[]>([]);
@@ -34,6 +36,9 @@ export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [expandedTypes, setExpandedTypes] = useState<Set<number>>(new Set());
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [savingHotLeads, setSavingHotLeads] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const filteredFiles = files.filter(f => 
     f.filename.toLowerCase().includes(search.toLowerCase()) ||
@@ -46,6 +51,7 @@ export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
     setModalSearch('');
     setExpandedRows(new Set());
     setExpandedTypes(new Set());
+    setSelectedIndices(new Set());
     try {
       const res = await fetch(`/api/history/${filename}`);
       const data = await res.json();
@@ -54,6 +60,53 @@ export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
       console.error(err);
     } finally {
       setLoadingPreview(false);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIndices.size === filteredPreview.length && filteredPreview.length > 0) {
+      setSelectedIndices(new Set());
+    } else {
+      setSelectedIndices(new Set(filteredPreview.map((_, i) => i)));
+    }
+  };
+
+  const toggleSelectLead = (idx: number) => {
+    const next = new Set(selectedIndices);
+    if (next.has(idx)) {
+      next.delete(idx);
+    } else {
+      next.add(idx);
+    }
+    setSelectedIndices(next);
+  };
+
+  const handleMoveToHotLeads = async () => {
+    if (selectedIndices.size === 0) return;
+    const selectedLeads = Array.from(selectedIndices).map(idx => filteredPreview[idx]).filter(Boolean);
+    if (selectedLeads.length === 0) return;
+
+    setSavingHotLeads(true);
+    try {
+      const res = await fetch('/api/hot-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leads: selectedLeads })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setToastMessage(`✓ Added ${data.added ?? selectedLeads.length} lead${(data.added ?? selectedLeads.length) > 1 ? 's' : ''} to Hot Leads!`);
+        setTimeout(() => setToastMessage(null), 3000);
+        setSelectedIndices(new Set());
+        if (onHotLeadsChange) onHotLeadsChange();
+      } else {
+        alert('Failed to save hot leads');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error connecting to backend');
+    } finally {
+      setSavingHotLeads(false);
     }
   };
 
@@ -253,9 +306,26 @@ export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
                     className="w-full pl-8 pr-2.5 py-1 bg-input/20 border border-border/50 rounded-md text-xs text-foreground placeholder:text-muted-foreground/60 outline-none"
                   />
                 </div>
+
+                {/* Move to Hot Leads Button */}
+                <button
+                  type="button"
+                  onClick={handleMoveToHotLeads}
+                  disabled={selectedIndices.size === 0 || savingHotLeads}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all shrink-0 cursor-pointer ${
+                    selectedIndices.size > 0
+                      ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-xs'
+                      : 'bg-black/5 dark:bg-white/5 text-muted-foreground/50 border border-border/40 cursor-not-allowed opacity-60'
+                  }`}
+                  title={selectedIndices.size === 0 ? 'Select leads below first using checkboxes' : `Move ${selectedIndices.size} selected leads to Hot Leads`}
+                >
+                  <Flame className="w-3.5 h-3.5" />
+                  <span>Move to Hot Leads {selectedIndices.size > 0 ? `(${selectedIndices.size})` : ''}</span>
+                </button>
+
                 <a
                   href={`/api/download/${selectedFile}`}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity shrink-0"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-black/5 dark:bg-white/5 border border-border/50 text-foreground text-xs font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors shrink-0"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Download
@@ -268,6 +338,14 @@ export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
                 </button>
               </div>
             </div>
+
+            {/* Notification Toast */}
+            {toastMessage && (
+              <div className="absolute top-16 right-6 z-50 px-4 py-2 rounded-lg bg-card border border-border/80 shadow-lg text-xs font-medium text-foreground flex items-center gap-2 animate-in slide-in-from-top-2">
+                <Flame className="w-3.5 h-3.5 text-primary" />
+                <span>{toastMessage}</span>
+              </div>
+            )}
 
             {/* Modal Body - Horizontal & Vertical Scroll Area */}
             <div className="flex-1 overflow-auto bg-card/40">
@@ -285,7 +363,16 @@ export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
                   <table className="w-full text-left text-xs text-foreground border-collapse">
                     <thead className="sticky top-0 z-20 bg-card border-b border-border/60 text-muted-foreground font-medium uppercase text-[10px] tracking-wider select-none shadow-xs">
                       <tr>
-                        <th className="px-3.5 py-3 w-[50px] text-center">#</th>
+                        <th className="px-3.5 py-3 w-[45px] text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedIndices.size === filteredPreview.length && filteredPreview.length > 0}
+                            onChange={toggleSelectAll}
+                            className="rounded border-border/60 text-primary focus:ring-0 cursor-pointer"
+                            title="Select All Visible Leads"
+                          />
+                        </th>
+                        <th className="px-3 py-3 w-[45px] text-center">#</th>
                         <th className="px-3.5 py-3 min-w-[220px]">Business Name</th>
                         <th className="px-3.5 py-3 min-w-[200px]">Types / Category</th>
                         <th className="px-3.5 py-3 min-w-[210px]">Website (Clickable)</th>
@@ -305,19 +392,32 @@ export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
                         const cleanWeb = cleanDomain(record.website);
                         const targetWeb = formatWebsiteUrl(record.website);
                         const primaryEmail = record.email ? record.email.split(' || ')[0].trim() : '';
+                        const isSelected = selectedIndices.has(idx);
 
                         return (
                           <>
                             <tr 
                               key={idx} 
                               className={`group transition-colors ${
-                                isRowExpanded 
-                                  ? 'bg-black/5 dark:bg-white/5' 
-                                  : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
+                                isSelected
+                                  ? 'bg-primary/5'
+                                  : isRowExpanded 
+                                    ? 'bg-black/5 dark:bg-white/5' 
+                                    : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
                               }`}
                             >
+                              {/* Row Checkbox */}
+                              <td className="px-3.5 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelectLead(idx)}
+                                  className="rounded border-border/60 text-primary focus:ring-0 cursor-pointer"
+                                />
+                              </td>
+
                               {/* Row Index */}
-                              <td className="px-3.5 py-3 text-center text-[11px] font-mono text-muted-foreground/60">
+                              <td className="px-3 py-3 text-center text-[11px] font-mono text-muted-foreground/60">
                                 {idx + 1}
                               </td>
 
@@ -523,7 +623,7 @@ export function LeadsTab({ files, onRefresh }: LeadsTabProps) {
                             {/* Expandable Details Accordion Card */}
                             {isRowExpanded && (
                               <tr className="bg-black/[0.03] dark:bg-white/[0.03]">
-                                <td colSpan={10} className="px-6 py-4 border-b border-border/40">
+                                <td colSpan={11} className="px-6 py-4 border-b border-border/40">
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
                                     {/* All Types & Categorization */}
                                     <div className="flex flex-col gap-2">

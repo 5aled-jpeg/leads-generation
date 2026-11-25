@@ -6,7 +6,7 @@ import {
   Settings, 
   Hash, 
   Activity, 
-  Globe, 
+  Flame, 
   Terminal, 
   PanelLeftClose, 
   PanelLeftOpen, 
@@ -18,6 +18,7 @@ import { SidebarNav } from './components/Sidebar';
 import { CommandPalette } from './components/CommandPalette';
 import { ScraperTab } from './components/ScraperTab';
 import { LeadsTab } from './components/LeadsTab';
+import { HotLeadsTab } from './components/HotLeadsTab';
 import { SettingsTab } from './components/SettingsTab';
 import { AnalyticsTab } from './components/AnalyticsTab';
 import type { NavItemData, NavGroupData, ScrapeTaskState, HistoryFile } from './types';
@@ -52,7 +53,20 @@ export default function App() {
   });
 
   const [historyFiles, setHistoryFiles] = useState<HistoryFile[]>([]);
+  const [hotLeadsCount, setHotLeadsCount] = useState<number>(0);
   const [presetSearch, setPresetSearch] = useState<{ query: string; location: string } | null>(null);
+
+  const fetchHotLeadsCount = async () => {
+    try {
+      const res = await fetch('/api/hot-leads');
+      const data = await res.json();
+      if (data && typeof data.total === 'number') {
+        setHotLeadsCount(data.total);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchStatus = async () => {
     try {
@@ -79,6 +93,7 @@ export default function App() {
   useEffect(() => {
     fetchHistory();
     fetchStatus();
+    fetchHotLeadsCount();
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -158,9 +173,10 @@ export default function App() {
           ]
         },
         { 
-          id: 'customers', 
-          title: 'Customers', 
-          icon: Globe,
+          id: 'hot-leads', 
+          title: 'Hot Leads', 
+          icon: Flame,
+          badge: hotLeadsCount || undefined,
         },
       ]
     },
@@ -197,6 +213,7 @@ export default function App() {
     switch (id) {
       case 'scrape': return 'Scraper';
       case 'leads': return 'Leads History';
+      case 'hot-leads': return 'Hot Leads';
       case 'analytics': return 'Analytics';
       case 'settings': return 'Settings';
       default: return 'Scraper';
@@ -277,6 +294,7 @@ export default function App() {
               taskState={taskState}
               onStartScrape={handleStartScrape}
               onStopScrape={handleStopScrape}
+              onHotLeadsChange={fetchHotLeadsCount}
               presetQuery={presetSearch?.query}
               presetLocation={presetSearch?.location}
             />
@@ -286,6 +304,14 @@ export default function App() {
             <LeadsTab 
               files={historyFiles}
               onRefresh={fetchHistory}
+              onHotLeadsChange={fetchHotLeadsCount}
+            />
+          )}
+
+          {activeId === 'hot-leads' && (
+            <HotLeadsTab 
+              onHotLeadsChange={fetchHotLeadsCount}
+              onNavigateToLeads={() => setActiveId('leads')}
             />
           )}
 

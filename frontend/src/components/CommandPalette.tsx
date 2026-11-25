@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, X, Sparkles, Sliders, Database, ArrowRight } from 'lucide-react';
+import { Search, X, Sparkles, Sliders, Database, ArrowRight, Flame } from 'lucide-react';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -26,6 +26,7 @@ export function CommandPalette({ isOpen, onClose, onSelectTab, onTriggerPreset }
   const actions = [
     { id: 'scrape', title: 'Open Lead Scraper', category: 'Navigation', icon: Sparkles },
     { id: 'leads', title: 'View Saved Leads & History', category: 'Navigation', icon: Database },
+    { id: 'hot-leads', title: 'View Hot Leads & Prospects', category: 'Navigation', icon: Flame },
     { id: 'settings', title: 'Configure API Keys & Engine', category: 'Navigation', icon: Sliders },
   ];
 

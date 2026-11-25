@@ -13,7 +13,8 @@ import {
   ChevronRight, 
   MapPin, 
   Clock, 
-  Square 
+  Square,
+  Flame 
 } from 'lucide-react';
 import { OpeningHours } from './OpeningHours';
 import { SocialLinks } from './SocialIcons';
@@ -23,6 +24,7 @@ interface ScraperTabProps {
   taskState: ScrapeTaskState;
   onStartScrape: (location: string, query: string, pages: number) => void;
   onStopScrape?: () => void;
+  onHotLeadsChange?: () => void;
   presetQuery?: string;
   presetLocation?: string;
 }
@@ -31,6 +33,7 @@ export function ScraperTab({
   taskState, 
   onStartScrape, 
   onStopScrape,
+  onHotLeadsChange,
   presetQuery = '', 
   presetLocation = '' 
 }: ScraperTabProps) {
@@ -41,6 +44,9 @@ export function ScraperTab({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [expandedTypes, setExpandedTypes] = useState<Set<number>>(new Set());
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [savingHotLeads, setSavingHotLeads] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isTableExpanded, setIsTableExpanded] = useState(false);
   const [stopping, setStopping] = useState(false);
 
@@ -122,6 +128,53 @@ export function ScraperTab({
   });
 
   const emailsFoundCount = (taskState.results || []).filter(r => r.email && r.email.trim()).length;
+
+  const toggleSelectAll = () => {
+    if (selectedIndices.size === filteredResults.length && filteredResults.length > 0) {
+      setSelectedIndices(new Set());
+    } else {
+      setSelectedIndices(new Set(filteredResults.map((_, i) => i)));
+    }
+  };
+
+  const toggleSelectLead = (idx: number) => {
+    const next = new Set(selectedIndices);
+    if (next.has(idx)) {
+      next.delete(idx);
+    } else {
+      next.add(idx);
+    }
+    setSelectedIndices(next);
+  };
+
+  const handleMoveToHotLeads = async () => {
+    if (selectedIndices.size === 0) return;
+    const selectedLeads = Array.from(selectedIndices).map(idx => filteredResults[idx]).filter(Boolean);
+    if (selectedLeads.length === 0) return;
+
+    setSavingHotLeads(true);
+    try {
+      const res = await fetch('/api/hot-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leads: selectedLeads })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setToastMessage(`✓ Added ${data.added ?? selectedLeads.length} lead${(data.added ?? selectedLeads.length) > 1 ? 's' : ''} to Hot Leads!`);
+        setTimeout(() => setToastMessage(null), 3000);
+        setSelectedIndices(new Set());
+        if (onHotLeadsChange) onHotLeadsChange();
+      } else {
+        alert('Failed to save hot leads');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error connecting to backend');
+    } finally {
+      setSavingHotLeads(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto pb-12 font-sans">
@@ -280,22 +333,40 @@ export function ScraperTab({
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
               {isTableExpanded && (
-                <div className="relative flex-1 sm:w-56 animate-in fade-in duration-100">
-                  <Search className="w-3.5 h-3.5 text-muted-foreground/70 absolute left-2.5 top-2" />
-                  <input
-                    type="text"
-                    value={tableFilter}
-                    onChange={e => setTableFilter(e.target.value)}
-                    placeholder="Filter results..."
-                    className="w-full pl-8 pr-2.5 py-1.5 bg-input/20 border border-border/50 rounded-md text-xs text-foreground placeholder:text-muted-foreground/60 outline-none"
-                  />
-                </div>
+                <>
+                  <div className="relative flex-1 sm:w-56 animate-in fade-in duration-100">
+                    <Search className="w-3.5 h-3.5 text-muted-foreground/70 absolute left-2.5 top-2" />
+                    <input
+                      type="text"
+                      value={tableFilter}
+                      onChange={e => setTableFilter(e.target.value)}
+                      placeholder="Filter results..."
+                      className="w-full pl-8 pr-2.5 py-1.5 bg-input/20 border border-border/50 rounded-md text-xs text-foreground placeholder:text-muted-foreground/60 outline-none"
+                    />
+                  </div>
+
+                  {/* Move to Hot Leads Button */}
+                  <button
+                    type="button"
+                    onClick={handleMoveToHotLeads}
+                    disabled={selectedIndices.size === 0 || savingHotLeads}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all shrink-0 cursor-pointer ${
+                      selectedIndices.size > 0
+                        ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-xs'
+                        : 'bg-black/5 dark:bg-white/5 text-muted-foreground/50 border border-border/40 cursor-not-allowed opacity-60'
+                    }`}
+                    title={selectedIndices.size === 0 ? 'Select leads below first using checkboxes' : `Move ${selectedIndices.size} selected leads to Hot Leads`}
+                  >
+                    <Flame className="w-3.5 h-3.5" />
+                    <span>Move to Hot Leads {selectedIndices.size > 0 ? `(${selectedIndices.size})` : ''}</span>
+                  </button>
+                </>
               )}
 
               {taskState.excel_file && (
                 <a
                   href={`/api/download/${taskState.excel_file}`}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-black/5 dark:bg-white/5 border border-border/50 text-foreground text-xs font-medium hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Excel
@@ -323,6 +394,14 @@ export function ScraperTab({
             </div>
           </div>
 
+          {/* Toast Notification */}
+          {toastMessage && (
+            <div className="p-3 rounded-lg bg-card border border-border/80 shadow-md text-xs font-medium text-foreground flex items-center gap-2 animate-in fade-in">
+              <Flame className="w-4 h-4 text-primary" />
+              <span>{toastMessage}</span>
+            </div>
+          )}
+
           {/* Table (Collapsible) */}
           {isTableExpanded && (
             <div className="w-full overflow-x-auto rounded-xl border border-border/50 bg-card shadow-sm animate-in fade-in zoom-in-98 duration-150">
@@ -330,40 +409,60 @@ export function ScraperTab({
                 <table className="w-full text-left text-xs text-foreground border-collapse">
                   <thead className="bg-black/5 dark:bg-white/5 text-muted-foreground font-medium uppercase text-[10px] border-b border-border/50 tracking-wider">
                     <tr>
-                      <th className="px-3.5 py-2.5 w-[50px] text-center">#</th>
-                    <th className="px-3.5 py-2.5 min-w-[200px]">Business</th>
-                    <th className="px-3.5 py-2.5 min-w-[180px]">Types / Category</th>
-                    <th className="px-3.5 py-2.5 min-w-[200px]">Website (Clickable)</th>
-                    <th className="px-3.5 py-2.5 min-w-[200px]">Email</th>
-                    <th className="px-3.5 py-2.5 min-w-[150px]">Phone</th>
-                    <th className="px-3.5 py-2.5 min-w-[120px]">Social</th>
-                    <th className="px-3.5 py-2.5 min-w-[100px]">Rating</th>
-                    <th className="px-3.5 py-2.5 min-w-[240px]">Address</th>
-                    <th className="px-3.5 py-2.5 w-[60px] text-right">Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {filteredResults.map((lead, idx) => {
-                    const types = getTypesList(lead.category, lead.keywords);
-                    const isTypesExpanded = expandedTypes.has(idx);
-                    const isRowExpanded = expandedRows.has(idx);
-                    const cleanWeb = cleanDomain(lead.website);
-                    const targetWeb = formatWebsiteUrl(lead.website);
-                    const primaryEmail = lead.email ? lead.email.split(' || ')[0].trim() : '';
+                      <th className="px-3.5 py-2.5 w-[45px] text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIndices.size === filteredResults.length && filteredResults.length > 0}
+                          onChange={toggleSelectAll}
+                          className="rounded border-border/60 text-primary focus:ring-0 cursor-pointer"
+                          title="Select All Visible Leads"
+                        />
+                      </th>
+                      <th className="px-3 py-2.5 w-[45px] text-center">#</th>
+                      <th className="px-3.5 py-2.5 min-w-[200px]">Business</th>
+                      <th className="px-3.5 py-2.5 min-w-[180px]">Types / Category</th>
+                      <th className="px-3.5 py-2.5 min-w-[200px]">Website (Clickable)</th>
+                      <th className="px-3.5 py-2.5 min-w-[200px]">Email</th>
+                      <th className="px-3.5 py-2.5 min-w-[150px]">Phone</th>
+                      <th className="px-3.5 py-2.5 min-w-[120px]">Social</th>
+                      <th className="px-3.5 py-2.5 min-w-[100px]">Rating</th>
+                      <th className="px-3.5 py-2.5 min-w-[240px]">Address</th>
+                      <th className="px-3.5 py-2.5 w-[60px] text-right">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {filteredResults.map((lead, idx) => {
+                      const types = getTypesList(lead.category, lead.keywords);
+                      const isTypesExpanded = expandedTypes.has(idx);
+                      const isRowExpanded = expandedRows.has(idx);
+                      const cleanWeb = cleanDomain(lead.website);
+                      const targetWeb = formatWebsiteUrl(lead.website);
+                      const primaryEmail = lead.email ? lead.email.split(' || ')[0].trim() : '';
+                      const isSelected = selectedIndices.has(idx);
 
-                    return (
-                      <>
-                        <tr 
-                          key={idx} 
-                          className={`transition-colors ${
-                            isRowExpanded 
-                              ? 'bg-black/5 dark:bg-white/5' 
-                              : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
-                          }`}
-                        >
-                          <td className="px-3.5 py-2.5 text-center text-[11px] font-mono text-muted-foreground/60">
-                            {idx + 1}
-                          </td>
+                      return (
+                        <>
+                          <tr 
+                            key={idx} 
+                            className={`transition-colors ${
+                              isSelected
+                                ? 'bg-primary/5'
+                                : isRowExpanded 
+                                  ? 'bg-black/5 dark:bg-white/5' 
+                                  : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
+                            }`}
+                          >
+                            <td className="px-3.5 py-2.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectLead(idx)}
+                                className="rounded border-border/60 text-primary focus:ring-0 cursor-pointer"
+                              />
+                            </td>
+                            <td className="px-3 py-2.5 text-center text-[11px] font-mono text-muted-foreground/60">
+                              {idx + 1}
+                            </td>
 
                           <td className="px-3.5 py-2.5">
                             <div className="font-medium text-foreground">{lead.name}</div>
@@ -525,7 +624,7 @@ export function ScraperTab({
 
                         {isRowExpanded && (
                           <tr className="bg-black/[0.03] dark:bg-white/[0.03]">
-                            <td colSpan={10} className="px-6 py-4 border-b border-border/40">
+                            <td colSpan={11} className="px-6 py-4 border-b border-border/40">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                                 <div className="flex flex-col gap-1.5">
                                   <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1">
