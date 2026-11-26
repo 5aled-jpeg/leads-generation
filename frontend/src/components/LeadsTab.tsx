@@ -33,6 +33,11 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
   const [previewRecords, setPreviewRecords] = useState<LeadRecord[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [modalSearch, setModalSearch] = useState('');
+  const [ratingFilter, setRatingFilter] = useState<'all' | '4.0' | '4.5'>('4.0'); // Default +4 stars as requested
+  const [filterHasEmail, setFilterHasEmail] = useState(false);
+  const [filterHasPhone, setFilterHasPhone] = useState(false);
+  const [filterHasWebsite, setFilterHasWebsite] = useState(false);
+
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [expandedTypes, setExpandedTypes] = useState<Set<number>>(new Set());
@@ -49,6 +54,10 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
     setSelectedFile(filename);
     setLoadingPreview(true);
     setModalSearch('');
+    setRatingFilter('4.0'); // Default +4 stars on inspection
+    setFilterHasEmail(false);
+    setFilterHasPhone(false);
+    setFilterHasWebsite(false);
     setExpandedRows(new Set());
     setExpandedTypes(new Set());
     setSelectedIndices(new Set());
@@ -163,16 +172,31 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
   };
 
   const filteredPreview = previewRecords.filter(r => {
-    if (!modalSearch) return true;
-    const q = modalSearch.toLowerCase();
-    return (
-      (r.name && r.name.toLowerCase().includes(q)) ||
-      (r.category && r.category.toLowerCase().includes(q)) ||
-      (r.email && r.email.toLowerCase().includes(q)) ||
-      (r.phone && r.phone.toLowerCase().includes(q)) ||
-      (r.website && r.website.toLowerCase().includes(q)) ||
-      (r.address && r.address.toLowerCase().includes(q))
-    );
+    // 1. Text Search
+    if (modalSearch) {
+      const q = modalSearch.toLowerCase();
+      const match = (
+        (r.name && r.name.toLowerCase().includes(q)) ||
+        (r.category && r.category.toLowerCase().includes(q)) ||
+        (r.email && r.email.toLowerCase().includes(q)) ||
+        (r.phone && r.phone.toLowerCase().includes(q)) ||
+        (r.website && r.website.toLowerCase().includes(q)) ||
+        (r.address && r.address.toLowerCase().includes(q))
+      );
+      if (!match) return false;
+    }
+
+    // 2. Rating Filter (default 4.0+)
+    const rVal = typeof r.rating === 'number' ? r.rating : parseFloat(String(r.rating || 0)) || 0;
+    if (ratingFilter === '4.0' && rVal < 4.0) return false;
+    if (ratingFilter === '4.5' && rVal < 4.5) return false;
+
+    // 3. Contact Filters
+    if (filterHasEmail && (!r.email || !r.email.trim())) return false;
+    if (filterHasPhone && (!r.phone || !r.phone.trim())) return false;
+    if (filterHasWebsite && (!r.website || !r.website.trim())) return false;
+
+    return true;
   });
 
   return (
@@ -336,6 +360,110 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
                 >
                   <X className="w-4 h-4" />
                 </button>
+              </div>
+            </div>
+
+            {/* Modal Filter Sub-bar */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-2 bg-black/[0.02] dark:bg-white/[0.02] border-b border-border/40 text-xs shrink-0 select-none">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Rating Filter Pills */}
+                <div className="flex items-center gap-1 bg-card p-1 rounded-md border border-border/50 text-[11px]">
+                  <span className="text-muted-foreground px-1 flex items-center gap-1 font-medium">
+                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                    Rating Filter:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRatingFilter('4.0')}
+                    className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                      ratingFilter === '4.0'
+                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    ★ 4.0+ Stars (Default)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRatingFilter('4.5')}
+                    className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                      ratingFilter === '4.5'
+                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    ★ 4.5+ Top Tier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRatingFilter('all')}
+                    className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                      ratingFilter === 'all'
+                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    All Ratings
+                  </button>
+                </div>
+
+                {/* Contact Filters */}
+                <button
+                  type="button"
+                  onClick={() => setFilterHasEmail(!filterHasEmail)}
+                  className={`px-2 py-1 rounded text-[11px] border cursor-pointer transition-colors ${
+                    filterHasEmail
+                      ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                      : 'border-border/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  ✉ Has Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterHasPhone(!filterHasPhone)}
+                  className={`px-2 py-1 rounded text-[11px] border cursor-pointer transition-colors ${
+                    filterHasPhone
+                      ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                      : 'border-border/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  📞 Has Phone
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterHasWebsite(!filterHasWebsite)}
+                  className={`px-2 py-1 rounded text-[11px] border cursor-pointer transition-colors ${
+                    filterHasWebsite
+                      ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                      : 'border-border/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  🌐 Has Website
+                </button>
+              </div>
+
+              {/* Status & Reset */}
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground self-end sm:self-auto font-mono">
+                <span>
+                  Showing {filteredPreview.length} of {previewRecords.length} records
+                  {ratingFilter !== 'all' ? ` (★ ${ratingFilter}+)` : ''}
+                </span>
+                {(ratingFilter !== 'all' || filterHasEmail || filterHasPhone || filterHasWebsite || modalSearch) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRatingFilter('all');
+                      setFilterHasEmail(false);
+                      setFilterHasPhone(false);
+                      setFilterHasWebsite(false);
+                      setModalSearch('');
+                    }}
+                    className="text-primary hover:underline cursor-pointer ml-1 font-sans"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
             </div>
 

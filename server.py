@@ -2,6 +2,7 @@ import os
 import glob
 import asyncio
 import json
+import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import pandas as pd
@@ -69,6 +70,9 @@ class ScrapeRequest(BaseModel):
     location: str
     query: str
     pages: int = 1
+    keywords: Optional[List[str]] = None
+    min_rating: Optional[float] = 4.0
+    require_website: Optional[bool] = False
 
 class SettingsUpdate(BaseModel):
     serper_api_key: Optional[str] = None
@@ -282,7 +286,14 @@ async def test_openai(body: Optional[KeyTestRequest] = None):
     except Exception as e:
         return {"success": False, "error": f"OpenAI error: {str(e)[:120]}"}
 
-async def run_scraper_task(location: str, query: str, pages: int):
+async def run_scraper_task(
+    location: str, 
+    query: str, 
+    pages: int,
+    keywords: Optional[List[str]] = None,
+    min_rating: Optional[float] = 4.0,
+    require_website: Optional[bool] = False
+):
     global active_task, is_scraping_stopped
     is_scraping_stopped = False
     active_task["running"] = True
@@ -293,20 +304,68 @@ async def run_scraper_task(location: str, query: str, pages: int):
     
     try:
         coords = get_coordinates(location)
-        if coords:
-            active_task["current_step"] = f"Coordinates found. Searching Google Maps for '{query}'..."
-        else:
-            active_task["current_step"] = f"Searching Google Maps directly for '{query}' in '{location}'..."
+        
+        # Parse keyword list (from keywords parameter or comma/semicolon separated query)
+        kw_list = []
+        if keywords and isinstance(keywords, list):
+            kw_list = [k.strip() for k in keywords if k and k.strip()]
+        if not kw_list and query:
+            parts = re.split(r'[,;]+', query)
+            kw_list = [p.strip() for p in parts if p.strip()]
+        if not kw_list:
+            kw_list = [query.strip() if query else "Business"]
+
+        all_places = []
+        seen_keys = set()
+        total_kw = len(kw_list)
+
+        # Search Google Maps for each keyword in target location
+        for idx, kw in enumerate(kw_list):
+            if is_scraping_stopped:
+                break
+            active_task["current_step"] = f"Searching keyword ({idx+1}/{total_kw}): '{kw}' in '{location}'..."
+            active_task["progress"] = round(0.06 + 0.14 * ((idx + 1) / total_kw), 2)
             
-        active_task["progress"] = 0.15
-        places_data = search_places(query, coords=coords, num_pages=pages, location=location)
-        if not places_data:
-            raise Exception("No places found on Google Maps. Verify query spelling or Serper key.")
+            places_res = search_places(kw, coords=coords, num_pages=pages, location=location)
+            if places_res:
+                for page_data in places_res:
+                    for place in page_data.get('places', []):
+                        cid = place.get('cid', '')
+                        title = str(place.get('title', '')).strip().lower()
+                        addr = str(place.get('address', '')).strip().lower()
+                        pkey = cid if cid else f"{title}|{addr}"
+                        
+                        if pkey and pkey not in seen_keys:
+                            seen_keys.add(pkey)
+                            
+                            # Filter by minimum rating
+                            if min_rating is not None and min_rating > 0:
+                                try:
+                                    r_val = float(place.get('rating', 0) or 0)
+                                except (ValueError, TypeError):
+                                    r_val = 0.0
+                                if r_val < min_rating:
+                                    continue
+                                    
+                            # Filter by website requirement
+                            if require_website and not (place.get('website') or place.get('url')):
+                                continue
+                                
+                            all_places.append(place)
+
+        if not all_places:
+            rating_msg = f" matching >= {min_rating} stars" if min_rating and min_rating > 0 else ""
+            raise Exception(f"No places found{rating_msg} for keywords '{', '.join(kw_list)}' in '{location}'. Try lowering the min rating filter.")
             
-        excel_filename = f"data_{query}_{location}_{get_current_date()}.xlsx"
-        active_task["current_step"] = "Saving initial Google Places records..."
+        clean_kw_str = "_".join(kw_list[:3])
+        clean_kw_str = re.sub(r'[^\w\-]', '_', clean_kw_str)[:40]
+        clean_loc = re.sub(r'[^\w\-]', '_', location)[:30]
+        excel_filename = f"data_{clean_kw_str}_{clean_loc}_{get_current_date()}.xlsx"
+        
+        rating_note = f" (filtered >= {min_rating}★)" if min_rating and min_rating > 0 else ""
+        active_task["current_step"] = f"Found {len(all_places)} places{rating_note}. Saving initial records..."
         active_task["progress"] = 0.25
-        file_path = save_places_to_excel(places_data, excel_filename)
+        file_path = save_places_to_excel([{"places": all_places}], excel_filename)
         active_task["excel_file"] = excel_filename
 
         # Callback for real-time progress
@@ -326,7 +385,7 @@ async def run_scraper_task(location: str, query: str, pages: int):
             except Exception:
                 pass
 
-        active_task["current_step"] = "Visiting websites and extracting contacts with AI..."
+        active_task["current_step"] = f"Visiting websites and extracting contacts for {len(all_places)} places with AI..."
         await process_businesses(
             excel_filename, 
             progress_callback=on_progress, 
@@ -340,7 +399,7 @@ async def run_scraper_task(location: str, query: str, pages: int):
             active_task["current_step"] = "Stopped by user. Partial results saved."
         else:
             active_task["progress"] = 1.0
-            active_task["current_step"] = "Complete! All leads generated and enriched."
+            active_task["current_step"] = f"Complete! All {len(all_places)} leads generated and enriched."
     except Exception as e:
         active_task["error"] = str(e)
         active_task["current_step"] = f"Error: {e}"
@@ -353,8 +412,18 @@ async def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
     if active_task["running"]:
         raise HTTPException(status_code=400, detail="A scraping task is already running.")
         
-    background_tasks.add_task(run_scraper_task, req.location, req.query, req.pages)
-    return {"status": "started", "message": f"Scrape started for '{req.query}' in '{req.location}'"}
+    background_tasks.add_task(
+        run_scraper_task, 
+        req.location, 
+        req.query, 
+        req.pages,
+        req.keywords,
+        req.min_rating,
+        req.require_website
+    )
+    kw_desc = ", ".join(req.keywords) if req.keywords else req.query
+    rating_desc = f" (min {req.min_rating}★)" if req.min_rating else ""
+    return {"status": "started", "message": f"Scrape started for '{kw_desc}' in '{req.location}'{rating_desc}"}
 
 @app.post("/api/scrape/stop")
 def stop_scrape():

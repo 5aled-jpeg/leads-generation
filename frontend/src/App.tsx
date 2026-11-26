@@ -123,12 +123,24 @@ export default function App() {
     };
   }, [taskState.running]);
 
-  const handleStartScrape = async (location: string, query: string, pages: number) => {
+  const handleStartScrape = async (
+    location: string, 
+    query: string, 
+    pages: number, 
+    minRating: number = 4.0, 
+    keywords?: string[]
+  ) => {
     try {
       const res = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location, query, pages }),
+        body: JSON.stringify({ 
+          location, 
+          query, 
+          pages, 
+          min_rating: minRating, 
+          keywords 
+        }),
       });
       const data = await res.json();
       if (res.ok) {

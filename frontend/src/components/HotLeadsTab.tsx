@@ -28,6 +28,11 @@ export function HotLeadsTab({ onHotLeadsChange, onNavigateToLeads }: HotLeadsTab
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [ratingFilter, setRatingFilter] = useState<'all' | '4.0' | '4.5'>('all');
+  const [filterHasEmail, setFilterHasEmail] = useState(false);
+  const [filterHasPhone, setFilterHasPhone] = useState(false);
+  const [filterHasWebsite, setFilterHasWebsite] = useState(false);
+
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -162,16 +167,31 @@ export function HotLeadsTab({ onHotLeadsChange, onNavigateToLeads }: HotLeadsTab
   };
 
   const filteredLeads = leads.filter(l => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (l.name && l.name.toLowerCase().includes(q)) ||
-      (l.category && l.category.toLowerCase().includes(q)) ||
-      (l.email && l.email.toLowerCase().includes(q)) ||
-      (l.phone && l.phone.toLowerCase().includes(q)) ||
-      (l.website && l.website.toLowerCase().includes(q)) ||
-      (l.address && l.address.toLowerCase().includes(q))
-    );
+    // 1. Text filter
+    if (search) {
+      const q = search.toLowerCase();
+      const match = (
+        (l.name && l.name.toLowerCase().includes(q)) ||
+        (l.category && l.category.toLowerCase().includes(q)) ||
+        (l.email && l.email.toLowerCase().includes(q)) ||
+        (l.phone && l.phone.toLowerCase().includes(q)) ||
+        (l.website && l.website.toLowerCase().includes(q)) ||
+        (l.address && l.address.toLowerCase().includes(q))
+      );
+      if (!match) return false;
+    }
+
+    // 2. Rating filter
+    const r = typeof l.rating === 'number' ? l.rating : parseFloat(String(l.rating || 0)) || 0;
+    if (ratingFilter === '4.0' && r < 4.0) return false;
+    if (ratingFilter === '4.5' && r < 4.5) return false;
+
+    // 3. Contact filters
+    if (filterHasEmail && (!l.email || !l.email.trim())) return false;
+    if (filterHasPhone && (!l.phone || !l.phone.trim())) return false;
+    if (filterHasWebsite && (!l.website || !l.website.trim())) return false;
+
+    return true;
   });
 
   const toggleSelectAll = () => {
@@ -273,34 +293,137 @@ export function HotLeadsTab({ onHotLeadsChange, onNavigateToLeads }: HotLeadsTab
           </div>
         )}
 
-        {/* Search & Bulk Action Bar */}
+        {/* Search, Rating & Filter Bar */}
         {leads.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-            <div className="relative flex-1 sm:max-w-md">
-              <Search className="w-3.5 h-3.5 text-muted-foreground/70 absolute left-2.5 top-2.5" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Filter hot leads by name, email, phone, category..."
-                className="w-full pl-8 pr-3 py-1.5 bg-input/20 border border-border/50 rounded-md text-xs text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors"
-              />
+          <div className="flex flex-col gap-2.5 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1 sm:max-w-md">
+                <Search className="w-3.5 h-3.5 text-muted-foreground/70 absolute left-2.5 top-2.5" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Filter hot leads by name, email, phone, category..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-input/20 border border-border/50 rounded-md text-xs text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors"
+                />
+              </div>
+
+              {selectedNames.size > 0 && (
+                <div className="flex items-center gap-2 p-1.5 px-3 rounded-lg bg-black/5 dark:bg-white/5 border border-border/60 text-xs">
+                  <span className="font-medium text-foreground">
+                    {selectedNames.size} lead{selectedNames.size > 1 ? 's' : ''} selected
+                  </span>
+                  <button
+                    onClick={handleRemoveSelected}
+                    className="flex items-center gap-1 px-2 py-1 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/20 cursor-pointer font-medium transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Remove Selected</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {selectedNames.size > 0 && (
-              <div className="flex items-center gap-2 p-1.5 px-3 rounded-lg bg-black/5 dark:bg-white/5 border border-border/60 text-xs">
-                <span className="font-medium text-foreground">
-                  {selectedNames.size} lead{selectedNames.size > 1 ? 's' : ''} selected
-                </span>
+            {/* Filter Pills Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/20 text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Rating Filter Pills */}
+                <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-md border border-border/40 text-[11px]">
+                  <span className="text-muted-foreground px-1 flex items-center gap-1 font-medium">
+                    <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                    Rating:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRatingFilter('4.0')}
+                    className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                      ratingFilter === '4.0'
+                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    ★ 4.0+
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRatingFilter('4.5')}
+                    className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                      ratingFilter === '4.5'
+                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    ★ 4.5+
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRatingFilter('all')}
+                    className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                      ratingFilter === 'all'
+                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    All
+                  </button>
+                </div>
+
+                {/* Contact Toggles */}
                 <button
-                  onClick={handleRemoveSelected}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/20 cursor-pointer font-medium transition-colors"
+                  type="button"
+                  onClick={() => setFilterHasEmail(!filterHasEmail)}
+                  className={`px-2 py-1 rounded text-[11px] border cursor-pointer transition-colors ${
+                    filterHasEmail
+                      ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                      : 'border-border/50 text-muted-foreground hover:text-foreground'
+                  }`}
                 >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Remove Selected</span>
+                  ✉ Has Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterHasPhone(!filterHasPhone)}
+                  className={`px-2 py-1 rounded text-[11px] border cursor-pointer transition-colors ${
+                    filterHasPhone
+                      ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                      : 'border-border/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  📞 Has Phone
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterHasWebsite(!filterHasWebsite)}
+                  className={`px-2 py-1 rounded text-[11px] border cursor-pointer transition-colors ${
+                    filterHasWebsite
+                      ? 'bg-primary/10 border-primary/30 text-primary font-medium'
+                      : 'border-border/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  🌐 Has Website
                 </button>
               </div>
-            )}
+
+              {/* Count and Reset */}
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
+                <span>Showing {filteredLeads.length} of {leads.length}</span>
+                {(ratingFilter !== 'all' || filterHasEmail || filterHasPhone || filterHasWebsite || search) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRatingFilter('all');
+                      setFilterHasEmail(false);
+                      setFilterHasPhone(false);
+                      setFilterHasWebsite(false);
+                      setSearch('');
+                    }}
+                    className="text-primary hover:underline cursor-pointer ml-1 font-sans"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
