@@ -33,7 +33,7 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
   const [previewRecords, setPreviewRecords] = useState<LeadRecord[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [modalSearch, setModalSearch] = useState('');
-  const [ratingFilter, setRatingFilter] = useState<'all' | '4.0' | '4.5'>('4.0'); // Default +4 stars as requested
+  const [ratingFilter, setRatingFilter] = useState<'all' | '4.0' | '4.5'>('all'); // Empty / all ratings as default
   const [filterHasEmail, setFilterHasEmail] = useState(false);
   const [filterHasPhone, setFilterHasPhone] = useState(false);
   const [filterHasWebsite, setFilterHasWebsite] = useState(false);
@@ -54,7 +54,7 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
     setSelectedFile(filename);
     setLoadingPreview(true);
     setModalSearch('');
-    setRatingFilter('4.0'); // Default +4 stars on inspection
+    setRatingFilter('all'); // Empty / all ratings as default
     setFilterHasEmail(false);
     setFilterHasPhone(false);
     setFilterHasWebsite(false);
@@ -374,6 +374,17 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
                   </span>
                   <button
                     type="button"
+                    onClick={() => setRatingFilter('all')}
+                    className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                      ratingFilter === 'all'
+                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    All Ratings (Default)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setRatingFilter('4.0')}
                     className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
                       ratingFilter === '4.0'
@@ -381,7 +392,7 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    ★ 4.0+ Stars (Default)
+                    ★ 4.0+ Stars
                   </button>
                   <button
                     type="button"
@@ -393,17 +404,6 @@ export function LeadsTab({ files, onRefresh, onHotLeadsChange }: LeadsTabProps) 
                     }`}
                   >
                     ★ 4.5+ Top Tier
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRatingFilter('all')}
-                    className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                      ratingFilter === 'all'
-                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    All Ratings
                   </button>
                 </div>
 

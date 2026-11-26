@@ -41,16 +41,16 @@ export function ScraperTab({
   presetQuery = '', 
   presetLocation = '' 
 }: ScraperTabProps) {
-  const [location, setLocation] = useState(presetLocation || 'Miami, FL');
+  const [location, setLocation] = useState(presetLocation || '');
   const [keywordInput, setKeywordInput] = useState('');
-  const [keywords, setKeywords] = useState<string[]>(['Coffees', 'Lux', 'barista']);
-  const [minRating, setMinRating] = useState<number>(4.0); // Default +4 stars as requested
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [minRating, setMinRating] = useState<number>(0); // Empty as default (no rating filter)
   const [requireWebsite, setRequireWebsite] = useState<boolean>(false);
   const [pages, setPages] = useState<number>(1);
 
-  // Table filter states
+  // Table filter states - empty as default
   const [tableFilter, setTableFilter] = useState('');
-  const [resultRatingFilter, setResultRatingFilter] = useState<'all' | '4.0' | '4.5'>('4.0');
+  const [resultRatingFilter, setResultRatingFilter] = useState<'all' | '4.0' | '4.5'>('all');
   const [resultHasEmail, setResultHasEmail] = useState<boolean>(false);
   const [resultHasPhone, setResultHasPhone] = useState<boolean>(false);
   const [resultHasWebsite, setResultHasWebsite] = useState<boolean>(false);
@@ -341,6 +341,17 @@ export function ScraperTab({
               <span className="text-muted-foreground px-1">Min Rating:</span>
               <button
                 type="button"
+                onClick={() => setMinRating(0)}
+                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                  minRating === 0 
+                    ? 'bg-primary text-primary-foreground font-medium' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All Ratings (Default)
+              </button>
+              <button
+                type="button"
                 onClick={() => setMinRating(4.0)}
                 className={`flex items-center gap-0.5 px-2 py-0.5 rounded cursor-pointer transition-colors ${
                   minRating === 4.0 
@@ -349,7 +360,7 @@ export function ScraperTab({
                 }`}
               >
                 <Star className={`w-3 h-3 ${minRating === 4.0 ? 'fill-current' : 'fill-amber-400/80 text-amber-400'}`} />
-                <span>4.0+ Stars (Default)</span>
+                <span>4.0+ Stars</span>
               </button>
               <button
                 type="button"
@@ -362,17 +373,6 @@ export function ScraperTab({
               >
                 <Star className={`w-3 h-3 ${minRating === 4.5 ? 'fill-current' : 'fill-amber-400/80 text-amber-400'}`} />
                 <span>4.5+ Stars</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMinRating(0)}
-                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                  minRating === 0 
-                    ? 'bg-primary text-primary-foreground font-medium' 
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                All Ratings
               </button>
             </div>
 
@@ -574,6 +574,17 @@ export function ScraperTab({
                   </span>
                   <button
                     type="button"
+                    onClick={() => setResultRatingFilter('all')}
+                    className={`px-2 py-0.5 rounded text-[11px] cursor-pointer transition-colors ${
+                      resultRatingFilter === 'all'
+                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    All (Default)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setResultRatingFilter('4.0')}
                     className={`px-2 py-0.5 rounded text-[11px] cursor-pointer transition-colors ${
                       resultRatingFilter === '4.0'
@@ -581,7 +592,7 @@ export function ScraperTab({
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    ★ 4.0+ (Default)
+                    ★ 4.0+
                   </button>
                   <button
                     type="button"
@@ -593,17 +604,6 @@ export function ScraperTab({
                     }`}
                   >
                     ★ 4.5+
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setResultRatingFilter('all')}
-                    className={`px-2 py-0.5 rounded text-[11px] cursor-pointer transition-colors ${
-                      resultRatingFilter === 'all'
-                        ? 'bg-primary text-primary-foreground font-medium shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    All
                   </button>
                 </div>
 

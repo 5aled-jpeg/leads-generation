@@ -127,7 +127,7 @@ export default function App() {
     location: string, 
     query: string, 
     pages: number, 
-    minRating: number = 4.0, 
+    minRating: number = 0, 
     keywords?: string[]
   ) => {
     try {

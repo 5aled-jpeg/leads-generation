@@ -71,7 +71,7 @@ class ScrapeRequest(BaseModel):
     query: str
     pages: int = 1
     keywords: Optional[List[str]] = None
-    min_rating: Optional[float] = 4.0
+    min_rating: Optional[float] = None
     require_website: Optional[bool] = False
 
 class SettingsUpdate(BaseModel):
@@ -291,7 +291,7 @@ async def run_scraper_task(
     query: str, 
     pages: int,
     keywords: Optional[List[str]] = None,
-    min_rating: Optional[float] = 4.0,
+    min_rating: Optional[float] = None,
     require_website: Optional[bool] = False
 ):
     global active_task, is_scraping_stopped
